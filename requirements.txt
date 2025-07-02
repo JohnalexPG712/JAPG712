@@ -1,0 +1,3 @@
+streamlit
+pillow
+PyPDF2
