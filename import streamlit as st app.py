@@ -86,7 +86,7 @@ if mode == "Convertir imágenes a PDF":
     )
     out_name = st.text_input(
         "Nombre del PDF",
-        "imagenes_carta.pdf",
+        "imagenes.pdf",
         key=f"out_{st.session_state.reset_token}",
     )
 
@@ -117,7 +117,7 @@ if mode == "Convertir imágenes a PDF":
 # MODO 2 — UNIR PDFs Y NORMALIZAR A CARTA
 # ────────────────────────────────────────────────────────────────────────────────
 else:
-    st.header("📚 → 📄 Unir PDFs (uniforme carta)")
+    st.header("📚 → 📄 Unir PDFs")
 
     pdfs = st.file_uploader(
         "Sube archivos PDF",
