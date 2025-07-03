@@ -24,7 +24,7 @@ if "reset_token" not in st.session_state:
 
 def clear_interface():
     # Incrementa el token; el callback provoca el rerun automáticamente
-    st.session_state.reset_token += 1:
+    st.session_state.reset_token += 1
     # Basta con modificar el estado: el callback ya provoca un rerun implícito
     st.session_state.reset_token += 1:
     st.session_state.reset_token += 1
