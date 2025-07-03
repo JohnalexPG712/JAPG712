@@ -6,93 +6,85 @@ from pypdf import PdfReader, PdfWriter, Transformation
 # ────────────────────────────────────────────────────────────────────────────────
 # CONSTANTES Y CONFIGURACIÓN
 # ────────────────────────────────────────────────────────────────────────────────
-LETTER_WIDTH  = 612   # 8.5 in × 72 pt
-LETTER_HEIGHT = 792   # 11  in × 72 pt
-JPEG_QUALITY  = 50    # Porcentaje de compresión JPEG (0–100)
+LETTER_WIDTH = 612   # 8.5 in × 72 pt
+LETTER_HEIGHT = 792  # 11 in × 72 pt
+JPEG_QUALITY = 50
 
 st.set_page_config(page_title="Image⇢PDF & PDF Merger", page_icon="📄", layout="centered")
 
 # ────────────────────────────────────────────────────────────────────────────────
-# ESTADO GLOBAL: TOKEN PARA FORZAR REFRESCO DE WIDGETS
+# ESTADO: CONTADOR PARA FORZAR REFRESCO DE WIDGETS
 # ────────────────────────────────────────────────────────────────────────────────
 if "reset_token" not in st.session_state:
     st.session_state.reset_token = 0  # se incrementa al pulsar Limpiar
 
 # ────────────────────────────────────────────────────────────────────────────────
-# FUNCIÓN LIMPIAR: incrementa token y rerun (compatibilidad versiones)
+# BOTÓN LIMPIAR — incrementa el token y hace un rerun
 # ────────────────────────────────────────────────────────────────────────────────
+
 def clear_interface():
+    # Basta con modificar el estado: el callback ya provoca un rerun implícito
+    st.session_state.reset_token += 1:
     st.session_state.reset_token += 1
+    # Compatibilidad con versiones nuevas y antiguas de Streamlit
     if hasattr(st, "rerun"):
-        st.rerun()              # Streamlit ≥ 1.26
+        st.rerun()
     else:
-        st.experimental_rerun() # Streamlit < 1.26
+        st.experimental_rerun():
+    st.session_state.reset_token += 1
+    st.experimental_rerun()
 
 st.sidebar.button("🧹 Limpiar", on_click=clear_interface)
 
-# ────────────────────────────────────────────────────────────────────────────────
-# TÍTULO Y SELECCIÓN DE MODO
-# ────────────────────────────────────────────────────────────────────────────────
 st.title("📄 Image ⇢ PDF  •  PDF Merger")
-mode = st.sidebar.radio(
-    "Seleccione la función",
-    ("Convertir imágenes a PDF", "Unir PDFs"),
-    key=f"mode_{st.session_state.reset_token}",
-)
+
+# Selector de modo principal
+mode = st.sidebar.radio("Seleccione la función", ("Convertir imágenes a PDF", "Unir PDFs"), key=f"mode_{st.session_state.reset_token}")
 
 # ────────────────────────────────────────────────────────────────────────────────
 # FUNCIONES AUXILIARES
 # ────────────────────────────────────────────────────────────────────────────────
-def fit_image_to_letter(img: Image.Image) -> Image.Image:
-    """Devuelve la imagen centrada en un lienzo carta, sin recortes."""
+
+def fit_image_to_letter(img):
     if img.mode in ("RGBA", "P"):
         img = img.convert("RGB")
-
     pic = img.copy()
     pic.thumbnail((LETTER_WIDTH, LETTER_HEIGHT), Image.LANCZOS)
-
     canvas = Image.new("RGB", (LETTER_WIDTH, LETTER_HEIGHT), "white")
-    cx = (LETTER_WIDTH - pic.width)  // 2
+    cx = (LETTER_WIDTH - pic.width) // 2
     cy = (LETTER_HEIGHT - pic.height) // 2
     canvas.paste(pic, (cx, cy))
-
     buf = io.BytesIO()
     canvas.save(buf, format="JPEG", optimize=True, quality=JPEG_QUALITY)
     buf.seek(0)
     return Image.open(buf)
 
+
 def add_page_as_letter(writer: PdfWriter, page):
-    """Escala y centra una página PDF dentro de un lienzo carta."""
     w, h = float(page.mediabox.width), float(page.mediabox.height)
     scale = min(LETTER_WIDTH / w, LETTER_HEIGHT / h)
-    tx    = (LETTER_WIDTH  - w * scale) / 2
-    ty    = (LETTER_HEIGHT - h * scale) / 2
-
+    tx = (LETTER_WIDTH - w * scale) / 2
+    ty = (LETTER_HEIGHT - h * scale) / 2
     blank = writer.add_blank_page(width=LETTER_WIDTH, height=LETTER_HEIGHT)
     transform = Transformation().scale(scale).translate(tx, ty)
-
     if hasattr(blank, "merge_transformed_page"):
         blank.merge_transformed_page(page, transform)
-    else:  # compatibilidad API antigua
+    else:
         blank.mergeTransformedPage(page, transform.ctm)
 
 # ────────────────────────────────────────────────────────────────────────────────
-# MODO 1 — CONVERTIR IMÁGENES A PDF
+# MODO 1 — IMÁGENES → PDF
 # ────────────────────────────────────────────────────────────────────────────────
 if mode == "Convertir imágenes a PDF":
-    st.header("🖼️ → 📄 Convertir imágenes a PDF")
+    st.header("🖼️ → 📄 Convertir imágenes a PDF (tamaño carta)")
 
     imgs = st.file_uploader(
         "Sube imágenes",
         type=["png", "jpg", "jpeg", "bmp", "tiff"],
         accept_multiple_files=True,
-        key=f"img_files_{st.session_state.reset_token}",
+        key=f"img_files_{st.session_state.reset_token}"
     )
-    out_name = st.text_input(
-        "Nombre del PDF",
-        "imagenes_carta.pdf",
-        key=f"out_name_{st.session_state.reset_token}",
-    )
+    out_name = st.text_input("Nombre del PDF", "imagenes_carta.pdf", key=f"out_name_{st.session_state.reset_token}")
 
     if st.button("Crear PDF", key=f"create_pdf_{st.session_state.reset_token}") and imgs:
         pages = []
@@ -101,39 +93,24 @@ if mode == "Convertir imágenes a PDF":
                 pages.append(fit_image_to_letter(Image.open(uf)))
             except Exception as e:
                 st.error(f"❌ {uf.name}: {e}")
-
         if pages:
             buf = io.BytesIO()
             pages[0].save(buf, format="PDF", save_all=True, append_images=pages[1:])
             buf.seek(0)
-            st.success("PDF generado correctamente.")
-            st.download_button(
-                "📥 Descargar PDF",
-                buf,
-                file_name=out_name,
-                mime="application/pdf",
-                key=f"dl_imgpdf_{st.session_state.reset_token}",
-            )
+            st.download_button("📥 Descargar PDF", buf, file_name=out_name, mime="application/pdf", key=f"dl_imgpdf_{st.session_state.reset_token}")
         else:
             st.warning("No se generó ninguna página válida.")
 
 # ────────────────────────────────────────────────────────────────────────────────
-# MODO 2 — UNIR PDFs Y NORMALIZAR A CARTA
+# MODO 2 — UNIR PDFs
 # ────────────────────────────────────────────────────────────────────────────────
 else:
     st.header("📚 → 📄 Unir PDFs (uniforme carta)")
 
     pdfs = st.file_uploader(
-        "Sube archivos PDF",
-        type=["pdf"],
-        accept_multiple_files=True,
-        key=f"pdf_files_{st.session_state.reset_token}",
+        "Sube archivos PDF", type=["pdf"], accept_multiple_files=True, key=f"pdf_files_{st.session_state.reset_token}"
     )
-    merged_name = st.text_input(
-        "Nombre del PDF combinado",
-        "documento_unido.pdf",
-        key=f"merged_name_{st.session_state.reset_token}",
-    )
+    merged_name = st.text_input("Nombre del PDF combinado", "documento_unido.pdf", key=f"merged_name_{st.session_state.reset_token}")
 
     if st.button("Unir PDFs", key=f"merge_btn_{st.session_state.reset_token}") and pdfs:
         writer = PdfWriter()
@@ -144,18 +121,10 @@ else:
                     add_page_as_letter(writer, page)
             except Exception as e:
                 st.error(f"❌ {pf.name}: {e}")
-
         if writer.pages:
             buf = io.BytesIO()
             writer.write(buf)
             buf.seek(0)
-            st.success("PDF combinado creado correctamente.")
-            st.download_button(
-                "📥 Descargar PDF unido",
-                buf,
-                file_name=merged_name,
-                mime="application/pdf",
-                key=f"dl_merge_{st.session_state.reset_token}",
-            )
+            st.download_button("📥 Descargar PDF unido", buf, file_name=merged_name, mime="application/pdf", key=f"dl_merge_{st.session_state.reset_token}")
         else:
             st.warning("No se añadió ninguna página válida.")
