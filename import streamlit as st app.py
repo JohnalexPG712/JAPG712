@@ -26,7 +26,7 @@ def clear_interface():
     # Incrementa el token; el callback provoca el rerun automáticamente
     st.session_state.reset_token += 1
     # Basta con modificar el estado: el callback ya provoca un rerun implícito
-    st.session_state.reset_token += 1:
+    st.session_state.reset_token += 1
     st.session_state.reset_token += 1
     # Compatibilidad con versiones nuevas y antiguas de Streamlit
     if hasattr(st, "rerun"):
@@ -78,7 +78,7 @@ def add_page_as_letter(writer: PdfWriter, page):
 # MODO 1 — IMÁGENES → PDF
 # ────────────────────────────────────────────────────────────────────────────────
 if mode == "Convertir imágenes a PDF":
-    st.header("🖼️ → 📄 Convertir imágenes a PDF")
+    st.header("🖼️ → 📄 Convertir imágenes a PDF (tamaño carta)")
 
     imgs = st.file_uploader(
         "Sube imágenes",
