@@ -10,61 +10,49 @@ st.title("📄 Image ⇢ PDF  •  PDF Merger")
 mode = st.sidebar.radio("Seleccione la función", ("Convertir imágenes a PDF", "Unir PDFs"))
 
 # ────────────────────────────────────────────────────────────────────────────────
-# UTILIDADES
+# UTILIDAD: Ajustar imagen a hoja carta sin recorte (puede incluir márgenes blancos)
 # ────────────────────────────────────────────────────────────────────────────────
 
-def resize_and_compress(img: Image.Image, dpi: int, quality: int) -> Image.Image:
-    """Redimensiona la imagen proporcionalmente, la centra en una hoja carta y la comprime.
-
-    - Hoja carta: 8.5 × 11 pulgadas
-    - Se preserva aspect‑ratio y se rellena con fondo blanco
-    - Luego se exporta a JPEG optimizado para reducir peso
+def fit_image_to_letter(img: Image.Image, dpi: int = 150, quality: int = 50) -> Image.Image:
+    """Ajusta la imagen para que quepa completamente en una hoja carta sin recorte.
+    Se agregan márgenes blancos si la proporción no coincide.
+    Redimensiona si es necesario y exporta como JPEG comprimido.
     """
-    # Asegurar modo RGB
     if img.mode in ("RGBA", "P"):
         img = img.convert("RGB")
 
-    # Tamaño destino carta en píxeles
-    target_px = (int(8.5 * dpi), int(11 * dpi))  # (ancho, alto)
+    # Tamaño de hoja carta en píxeles
+    carta_px = (int(8.5 * dpi), int(11 * dpi))
 
-    # Copia de la imagen para no alterar la original
+    # Redimensionar conservando proporción (sin recorte)
     img_copy = img.copy()
-    # Redimensionar conservando proporción
-    img_copy.thumbnail(target_px, Image.LANCZOS)
+    img_copy.thumbnail(carta_px, Image.LANCZOS)
 
-    # Crear canvas blanco tamaño carta
-    canvas = Image.new("RGB", target_px, color="white")
-    # Calcular posición centrada
-    offset_x = (target_px[0] - img_copy.width) // 2
-    offset_y = (target_px[1] - img_copy.height) // 2
-    canvas.paste(img_copy, (offset_x, offset_y))
+    # Crear fondo blanco tamaño carta y centrar imagen
+    canvas = Image.new("RGB", carta_px, "white")
+    offset = (
+        (carta_px[0] - img_copy.width) // 2,
+        (carta_px[1] - img_copy.height) // 2
+    )
+    canvas.paste(img_copy, offset)
 
-    # Comprimir a JPEG en buffer
+    # Comprimir a JPEG
     buffer = io.BytesIO()
     canvas.save(buffer, format="JPEG", optimize=True, quality=quality)
     buffer.seek(0)
-
-    # Abrir de nuevo la versión comprimida como PIL Image
     return Image.open(buffer)
 
 # ────────────────────────────────────────────────────────────────────────────────
 # MODO 1 — IMÁGENES → PDF
 # ────────────────────────────────────────────────────────────────────────────────
 if mode == "Convertir imágenes a PDF":
-    st.header("🖼️  →  📄 Convertir imágenes a PDF tamaño carta")
+    st.header("🖼️  →  📄 Convertir imágenes a PDF (hoja carta sin recorte)")
 
     uploaded_files = st.file_uploader(
         "Sube tus imágenes (PNG, JPG, JPEG, BMP, TIFF)",
         type=["png", "jpg", "jpeg", "bmp", "tiff"],
         accept_multiple_files=True,
     )
-
-    with st.expander("⚙️  Opciones de redimensionado y compresión"):
-        do_resize = st.checkbox("Ajustar a carta y comprimir", value=True)
-        dpi = st.slider("Resolución destino (DPI)", 72, 300, 150, step=12,
-                        help="A 150 DPI se obtienen PDFs ligeros y legibles.")
-        quality = st.slider("Calidad JPEG (10‑95)", 10, 95, 80,
-                            help="Menor calidad ⇒ archivo más pequeño.")
 
     output_name = st.text_input("Nombre del PDF a generar", "imagenes_carta.pdf")
 
@@ -73,16 +61,10 @@ if mode == "Convertir imágenes a PDF":
         for uf in uploaded_files:
             try:
                 img = Image.open(uf)
+                final_img = fit_image_to_letter(img)
+                processed_images.append(final_img)
             except Exception as e:
-                st.error(f"No se pudo abrir {uf.name}: {e}")
-                continue
-
-            if do_resize:
-                img_proc = resize_and_compress(img, dpi=dpi, quality=quality)
-            else:
-                img_proc = img.convert("RGB") if img.mode in ("RGBA", "P") else img
-
-            processed_images.append(img_proc)
+                st.error(f"❌ Error al procesar {uf.name}: {e}")
 
         if processed_images:
             pdf_buffer = io.BytesIO()
@@ -102,7 +84,7 @@ if mode == "Convertir imágenes a PDF":
                 mime="application/pdf",
             )
         else:
-            st.warning("No se procesó ninguna imagen válida.")
+            st.warning("No se generó ninguna página válida.")
 
 # ────────────────────────────────────────────────────────────────────────────────
 # MODO 2 — UNIR PDFs
@@ -121,19 +103,17 @@ elif mode == "Unir PDFs":
         for pf in pdf_files:
             try:
                 reader = PdfReader(pf)
+                for page in reader.pages:
+                    writer.add_page(page)
             except Exception as e:
                 st.error(f"No se pudo leer {pf.name}: {e}")
-                continue
-            for page in reader.pages:
-                writer.add_page(page)
 
-        total_pages = len(writer.pages)
-        if total_pages:
+        if writer.pages:
             buffer = io.BytesIO()
             writer.write(buffer)
             buffer.seek(0)
             size_mb = len(buffer.getvalue()) / (1024 * 1024)
-            st.success(f"✅ {merged_name} creado ({total_pages} páginas, ≈ {size_mb:.2f} MB)")
+            st.success(f"✅ {merged_name} creado ({len(writer.pages)} páginas, ≈ {size_mb:.2f} MB)")
             st.download_button(
                 label="📥 Descargar PDF unido",
                 data=buffer,
@@ -142,4 +122,3 @@ elif mode == "Unir PDFs":
             )
         else:
             st.warning("No se añadió ninguna página válida.")
-
