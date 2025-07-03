@@ -1,3 +1,3 @@
 streamlit
 pillow
-PyPDF2
+pypdf>=3.16.0
